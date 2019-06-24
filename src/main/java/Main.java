@@ -39,6 +39,7 @@ public class Main {
         kryo.register(RegisterRequest.class);
         kryo.register(AuthenticationConfirmation.class);
         kryo.register(KeepAlive.class);
+        kryo.register(Command.class);
         log("Registered kryonet classes");
     }
 
@@ -73,7 +74,26 @@ public class Main {
         client.sendTCP(craftRegisterRequest());
         log("Sent authentication request");
         startKeepAliveCheck();
+        startCommandListener();
 
+
+    }
+
+    private static void startCommandListener() {
+
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+               if (object instanceof Command) {
+                   //if (!authenticated) return;
+
+                   Command command = (Command) object;
+                   commandLog(command.getCommand());
+
+
+
+               }
+            }
+        });
 
     }
 
@@ -174,11 +194,15 @@ public class Main {
     }
 
     public static void log(String message) {
-        System.out.println(ANSI_GREEN + "[Command] " + ANSI_RESET + message);
+        System.out.println(ANSI_GREEN + "[Client] " + ANSI_RESET + message);
     }
 
     public static void error(String message) {
-        System.out.println(ANSI_RED + "[Command] " + ANSI_RESET + message);
+        System.out.println(ANSI_RED + "[Client] " + ANSI_RESET + message);
+    }
+
+    public static void commandLog(String message){
+        System.out.println(ANSI_BLUE+"[RECEIVED COMMAND] "+ANSI_RESET+message);
     }
 
     public static String getIp() throws Exception {
