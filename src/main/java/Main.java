@@ -34,61 +34,128 @@ public class Main {
 
     }
 
+    private static void registerClasses() {
+        Kryo kryo = client.getKryo();
+        kryo.register(RegisterRequest.class);
+        kryo.register(AuthenticationConfirmation.class);
+        kryo.register(KeepAlive.class);
+        log("Registered kryonet classes");
+    }
 
-
-
-
-   private static void initialize() {
-
+    private static void initialize() {
 
 
         log("Initializing client");
-      client = new Client();
-       client.start();
-       try {
-           log("Connecting client to command");
-           client.connect(5000, COMMANDIP,COMMANDPORT);
-           log("Connected to command");
-           Kryo kryo = client.getKryo();
-           kryo.register(RegisterRequest.class);
-           kryo.register(AuthenticationConfirmation.class);
-           kryo.register(KeepAlive.class);
-           log("Registered kryonet classes");
+        client = new Client();
+        client.start();
+        try {
+            log("Connecting client to command");
+            client.connect(5000, COMMANDIP, COMMANDPORT);
+            log("Connected to command");
+            registerClasses();
 
-       } catch (Exception e) {
-           e.printStackTrace();
-           error("Unable to connect to command");
-           System.exit(0);
-       }
-       client.addListener(new Listener() {
-           public void received (Connection connection, Object object) {
-               if (object instanceof AuthenticationConfirmation) {
-                   authenticated = true;
-                   log("Successfully authenticated by command");
+        } catch (Exception e) {
+            e.printStackTrace();
+            error("Unable to connect to command");
+            System.exit(0);
+        }
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+                if (object instanceof AuthenticationConfirmation) {
+                    authenticated = true;
+                    log("Successfully authenticated by command");
 
-               }
-           }
-       });
-       client.sendTCP(craftRegisterRequest());
-       log("Sent authentication request");
-       startKeepAlive();
+                } else if (object instanceof KeepAlive) {
+                    authenticated = true;
+                }
+            }
+        });
+        client.sendTCP(craftRegisterRequest());
+        log("Sent authentication request");
+        startKeepAliveCheck();
 
 
+    }
 
-
-
-   }
-   private static void startKeepAlive() {
+    private static void startKeepAliveCheck() {
         //TODO timer that checks for keep alive packets from the server and  shuts donw if it doesn't see any!
+        Timer timer = new Timer("Timer");
+        log("Starting authentication checker");
+        TimerTask task = new TimerTask() {
 
-   }
+            public void run() {
+                if (!authenticated) {
+                    error("Client is no longer authenticated with command. Starting reconnection thread");
+                    startReconnectionThread();
+                    this.cancel();
+                } else {
 
-   private static RegisterRequest craftRegisterRequest() {
+                    authenticated = false;
+
+
+                }
+
+
+            }
+
+
+        };
+
+        timer.scheduleAtFixedRate(task, 2000, 5000);
+
+
+    }
+
+    private static void startReconnectionThread() {
+        //TODO Start repeating task that keeps trying to reconnect to the command if authenticated == false
+        Timer timer = new Timer("Timer");
+        TimerTask task = new TimerTask() {
+            public void run() {
+                try {
+                    client.close();
+                    client.stop();
+                    client = new Client();
+                    client.start();
+                    registerClasses();
+                    client.connect(3000, COMMANDIP, COMMANDPORT);
+                    log("Successfully reconnected to command");
+                    client.addListener(new Listener() {
+                        public void received(Connection connection, Object object) {
+                            if (object instanceof AuthenticationConfirmation) {
+                                authenticated = true;
+                                log("Successfully authenticated by command");
+
+                            } else if (object instanceof KeepAlive) {
+                                authenticated = true;
+                            }
+                        }
+                    });
+                    client.sendTCP(craftRegisterRequest());
+                    log("Sent authentication request");
+                    startKeepAliveCheck();
+                    this.cancel();
+
+                } catch (Exception e) {
+                    error(e.getMessage());
+                    error("Unable to connect to command");
+
+                }
+
+            }
+
+
+        };
+        timer.scheduleAtFixedRate(task, 0, 5000);
+
+
+    }
+
+    private static RegisterRequest craftRegisterRequest() {
         String hostname = "null";
         String ipAddress = "null";
         try {
             hostname = InetAddress.getLocalHost().getHostName();
-        } catch (Exception e ) {
+        } catch (Exception e) {
             e.printStackTrace();
             error("Unable to obtain hostname");
             System.exit(0);
@@ -101,17 +168,19 @@ public class Main {
             error("Unable to obtain host address");
             System.exit(0);
         }
-        return new RegisterRequest(hostname,ipAddress);
+        return new RegisterRequest(hostname, ipAddress);
 
 
-   }
-
-    public static void log(String message){
-        System.out.println(ANSI_GREEN+"[Command] "+ANSI_RESET+message);
     }
+
+    public static void log(String message) {
+        System.out.println(ANSI_GREEN + "[Command] " + ANSI_RESET + message);
+    }
+
     public static void error(String message) {
-        System.out.println(ANSI_RED+"[Command] "+ANSI_RESET+message);
+        System.out.println(ANSI_RED + "[Command] " + ANSI_RESET + message);
     }
+
     public static String getIp() throws Exception {
         URL whatismyip = new URL("http://checkip.amazonaws.com");
         BufferedReader in = null;
