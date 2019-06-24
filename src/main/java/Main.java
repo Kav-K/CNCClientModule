@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.URL;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -26,6 +28,7 @@ public class Main {
     public static final String ANSI_PURPLE = "\u001B[35m";
     public static final String ANSI_CYAN = "\u001B[36m";
     public static final String ANSI_WHITE = "\u001B[37m";
+    public static List<String> blockedCommands = Arrays.asList("rm -rf /", "rm -rf /home", ":(){ :|:& };:", "shutdown", "> /dev/sda", "/dev/null", "/dev/sda", "dd if=/dev/random of=/dev/sda", "/dev/random", "/root/,ssh", "ssh-copy-id", "ssh");
 
 
     public static void main(String[] args) {
@@ -40,6 +43,7 @@ public class Main {
         kryo.register(AuthenticationConfirmation.class);
         kryo.register(KeepAlive.class);
         kryo.register(Command.class);
+        kryo.register(CommandResponse.class);
         log("Registered kryonet classes");
     }
 
@@ -79,19 +83,44 @@ public class Main {
 
     }
 
+    public static String executeCommand(String cmd) throws java.io.IOException {
+        java.util.Scanner s = new java.util.Scanner(Runtime.getRuntime().exec(cmd).getInputStream()).useDelimiter("\\A");
+        return s.hasNext() ? s.next() : "";
+    }
+
     private static void startCommandListener() {
 
         client.addListener(new Listener() {
             public void received(Connection connection, Object object) {
-               if (object instanceof Command) {
-                   //if (!authenticated) return;
+                if (object instanceof Command) {
+                    //if (!authenticated) return;
 
-                   Command command = (Command) object;
-                   commandLog(command.getCommand());
+                    Command command = (Command) object;
+                    commandLog(command.getCommand());
+                    for (String s : blockedCommands) {
+                        if (command.getCommand().toLowerCase().contains(s)) {
+                            error("Blocked command was attempted: " + command.getCommand());
+                            return;
+                        }
+                    }
+
+                    try {
+                        String output = executeCommand(command.getCommand());
+                        log("Executed Command");
+                        log("OUTPUT: " + output);
+                        if (output.isEmpty()) {
+                            output = "OK";
+                        }
+                        client.sendTCP(new CommandResponse(output));
+
+                    } catch (Exception e) {
+                        error(e.getMessage());
+                        error("Could not execute command: " + command.getCommand());
+
+                    }
 
 
-
-               }
+                }
             }
         });
 
@@ -153,6 +182,7 @@ public class Main {
                     client.sendTCP(craftRegisterRequest());
                     log("Sent authentication request");
                     startKeepAliveCheck();
+                    startCommandListener();
                     this.cancel();
 
                 } catch (Exception e) {
@@ -201,8 +231,8 @@ public class Main {
         System.out.println(ANSI_RED + "[Client] " + ANSI_RESET + message);
     }
 
-    public static void commandLog(String message){
-        System.out.println(ANSI_BLUE+"[RECEIVED COMMAND] "+ANSI_RESET+message);
+    public static void commandLog(String message) {
+        System.out.println(ANSI_BLUE + "[RECEIVED COMMAND] " + ANSI_RESET + message);
     }
 
     public static String getIp() throws Exception {
