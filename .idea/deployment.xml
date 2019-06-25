@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="D" autoUploadExternalChanges="true">
+    <serverData>
+      <paths name="api.kaveenk.com">
+        <serverdata>
+          <mappings>
+            <mapping deploy="cncclient.jar" local="$PROJECT_DIR$/build/libs/cncclient-1.0-SNAPSHOT-all.jar" web="/" />
+            <mapping local="" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="digistart.ca">
+        <serverdata>
+          <mappings>
+            <mapping deploy="cncclient.jar" local="$PROJECT_DIR$/build/libs/cncclient-1.0-SNAPSHOT-all.jar" web="/" />
+            <mapping local="" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="kaveenk.com">
+        <serverdata>
+          <mappings>
+            <mapping deploy="cncclient.jar" local="$PROJECT_DIR$/build/libs/cncclient-1.0-SNAPSHOT-all.jar" web="/" />
+            <mapping local="" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

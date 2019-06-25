@@ -36,11 +36,12 @@ public class Main {
     private static final int COMMANDPORT = 80;
 
     static Client client;
-
+    //AuthenticationStatusLock prevents keepalive transmissions from the command from changing the authentication status to true, in the event of a manual reconnection request!
+    private static boolean authenticationStatusLock = false;
     private static boolean authenticated = false;
 
     //List of classes to be registered with kryo for (de)serialization
-    public static final List<Class> KRYO_CLASSES = Arrays.asList(AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class,KillRequest.class);
+    public static final List<Class> KRYO_CLASSES = Arrays.asList(ReconnectRequest.class, AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class, KillRequest.class);
 
 
     //TODO More substantial way to block unsafe commands
@@ -104,7 +105,7 @@ public class Main {
     }
 
     /*
-    Listens for commands sent from the command server and attempts to execute them, returns a CommandResponse.
+    Listens for commands sent from the command server and attempts to execute them, returns a CommandResponse!
      */
     private static void startCommandListener() {
 
@@ -178,15 +179,18 @@ public class Main {
 
 
     }
+
     private static void startListeners() {
         client.addListener(new Listener() {
             public void received(Connection connection, Object object) {
                 if (object instanceof AuthenticationConfirmation) {
-                    authenticated = true;
+                    if (!authenticationStatusLock)
+                        authenticated = true;
                     log("Successfully authenticated by command");
 
                 } else if (object instanceof KeepAlive) {
-                    authenticated = true;
+                    if (!authenticationStatusLock)
+                        authenticated = true;
                 }
             }
         });
@@ -195,12 +199,40 @@ public class Main {
         startKeepAliveCheck();
         startCommandListener();
         startKillListener();
+        startReconnectRequestListener();
+
     }
+
+    private static void startReconnectRequestListener() {
+
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+                if (object instanceof ReconnectRequest) {
+                    try {
+                        log("Attempting soft-kryonet reconnection to command server");
+                        authenticated = false;
+                        authenticationStatusLock = true;
+
+
+                    } catch (Exception e) {
+                        error(e.getMessage());
+                        error("Could not reconnect to command server");
+
+                    }
+
+
+                }
+
+            }
+
+        });
+    }
+
 
     /*
     Listens for a kill message from COMMAND
      */
-    private static void startKillListener(){
+    private static void startKillListener() {
 
         client.addListener(new Listener() {
             public void received(Connection connection, Object object) {
@@ -218,33 +250,37 @@ public class Main {
                     }
 
 
-
                 }
             }
         });
+    }
+
+    private static void reconnect() throws Exception {
+
+
+        error("Reconnect initiated, destroying old client instance");
+        client.close();
+        client.stop();
+        log("Attempting connection to command server");
+        client = new Client(WRITEBUFFER, OBJECTBUFFER);
+        client.start();
+        registerClasses();
+        client.connect(3000, COMMANDIP, COMMANDPORT);
+        log("Successfully reconnected to command");
+        startListeners();
+
 
     }
 
-
-
-    /*
-    A duplicate of initialize() inside a task, attempts reconnection with the command server if it was down.
-     */
     private static void startReconnectionThread() {
+
 
         Timer timer = new Timer("Timer");
         TimerTask task = new TimerTask() {
             public void run() {
                 try {
-                    //This is a duplicate of initialize and will be cleaned up later
-                    client.close();
-                    client.stop();
-                    client = new Client(WRITEBUFFER, OBJECTBUFFER);
-                    client.start();
-                    registerClasses();
-                    client.connect(3000, COMMANDIP, COMMANDPORT);
-                    log("Successfully reconnected to command");
-                    startListeners();
+                    authenticationStatusLock = false;
+                    reconnect();
 
                     this.cancel();
 
