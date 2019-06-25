@@ -40,7 +40,7 @@ public class Main {
     private static boolean authenticated = false;
 
     //List of classes to be registered with kryo for (de)serialization
-    public static final List<Class> KRYO_CLASSES = Arrays.asList(AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class);
+    public static final List<Class> KRYO_CLASSES = Arrays.asList(AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class,KillRequest.class);
 
 
     //TODO More substantial way to block unsafe commands
@@ -98,21 +98,7 @@ public class Main {
         This listener functions as an authentication confirmation receiver, and as well as a makeshift status checker for the command server.
         coupled together with startKeepAliveCheck()
          */
-        client.addListener(new Listener() {
-            public void received(Connection connection, Object object) {
-                if (object instanceof AuthenticationConfirmation) {
-                    authenticated = true;
-                    log("Successfully authenticated by command");
-
-                } else if (object instanceof KeepAlive) {
-                    authenticated = true;
-                }
-            }
-        });
-        client.sendTCP(craftRegisterRequest());
-        log("Sent authentication request");
-        startKeepAliveCheck();
-        startCommandListener();
+        startListeners();
 
 
     }
@@ -149,6 +135,7 @@ public class Main {
                         e.printStackTrace();
                         error(e.getMessage());
                         error("Could not execute command: " + command.getCommand());
+                        client.sendTCP(new CommandResponse(e.getMessage()));
 
                     }
 
@@ -191,6 +178,54 @@ public class Main {
 
 
     }
+    private static void startListeners() {
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+                if (object instanceof AuthenticationConfirmation) {
+                    authenticated = true;
+                    log("Successfully authenticated by command");
+
+                } else if (object instanceof KeepAlive) {
+                    authenticated = true;
+                }
+            }
+        });
+        client.sendTCP(craftRegisterRequest());
+        log("Sent authentication request");
+        startKeepAliveCheck();
+        startCommandListener();
+        startKillListener();
+    }
+
+    /*
+    Listens for a kill message from COMMAND
+     */
+    private static void startKillListener(){
+
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+                if (object instanceof KillRequest) {
+                    KillRequest killRequest = (KillRequest) object;
+                    if (killRequest.destroy) {
+                        //TODO Destroy the client
+                    } else {
+                        log("KILL REQUEST RECEIVED BY COMMAND. GRACEFULLY EXITING");
+                        error("KILL REQUEST RECEIVED BY COMMAND. GRACEFULLY EXITING");
+                        client.stop();
+                        client.close();
+                        System.exit(0);
+
+                    }
+
+
+
+                }
+            }
+        });
+
+    }
+
+
 
     /*
     A duplicate of initialize() inside a task, attempts reconnection with the command server if it was down.
@@ -209,21 +244,8 @@ public class Main {
                     registerClasses();
                     client.connect(3000, COMMANDIP, COMMANDPORT);
                     log("Successfully reconnected to command");
-                    client.addListener(new Listener() {
-                        public void received(Connection connection, Object object) {
-                            if (object instanceof AuthenticationConfirmation) {
-                                authenticated = true;
-                                log("Successfully authenticated by command");
+                    startListeners();
 
-                            } else if (object instanceof KeepAlive) {
-                                authenticated = true;
-                            }
-                        }
-                    });
-                    client.sendTCP(craftRegisterRequest());
-                    log("Sent authentication request");
-                    startKeepAliveCheck();
-                    startCommandListener();
                     this.cancel();
 
                 } catch (Exception e) {
