@@ -9,6 +9,11 @@ public class RegisterRequest {
         this.hostName = hostName;
         this.ipAddress = ipAddress;
 
+
+
+
+
+
     }
 
     public String getHostName() {

