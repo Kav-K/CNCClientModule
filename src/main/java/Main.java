@@ -266,7 +266,7 @@ public class Main {
                         authenticated = true;
                     log("Successfully authenticated by command");
 
-                } else if (object instanceof KeepAlive) {
+                } else if (object instanceof KeepAlive && connection.getRemoteAddressTCP().getAddress().getHostAddress().equals(COMMANDIP)) {
                     if (!authenticationStatusLock)
                         authenticated = true;
                 }
