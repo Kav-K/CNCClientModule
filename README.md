@@ -13,16 +13,27 @@ Command-And-Control allows you to control multiple machines running a Linux-styl
 - Kill function to terminate all clients
 - Reconnection feature (Reconnect clients manually from command)
 - Secure SHA256-RSA Keypair authentication between the server and the client to make sure unauthorized commands are not executed
+## Usage
+To use the CNC system, simply type commands into the server console and it will be propagated to all clients
+- "(LINUX TERMINAL COMMAND) - Sends the command to all connected clients and returns the output of each client. E.g, if you wanted to create a file called test.txt in the root directory of all clients, you'd simply type in "touch /root/test.txt" in the server console"
+
+Custom global functions will start with a forward slash (/) and are listed below
+- "/KILL" - Disconnect all clients attached to server
+- "/RECONNECT" - Forces all clients to reconnect (and also to reobtain the server public key)
+- "/LIST" - Lists all the clients connected to the command server
+- "/INFO" - Returns the system information and statistics of all the clients connected to the command server
+
 ## Todo
 - Send commands to individual clients only (WIP)
-- Obtain client system information/statistics
 - Start clients on system startup
 - Two way authentication with the client acting as an authentication SOURCE
-
 ## How To Use
 - Build the CNCCommandModule
 - Build the CNCClientModule after replacing the COMMANDIP and COMMANDPORT fields in Main.java with the respective ip and port of your command module
 - Done! (Simple right?)
+
+
+
 ## Security
 This system is NOT cryptographically secure but does have a system of verification to ensure that server Command requests are authentic. The current security implementation involves the client sending a KeyRequest to the server. The server will then send back a copy of its public key to the client. Authentic communication from the designated server will have a digital signature attached to it, and will be verified on the client side before commands are executed.
 

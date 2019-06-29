@@ -286,6 +286,26 @@ public class Main {
         client.addListener(new Listener() {
             public void received(Connection connection, Object object) {
                 if (object instanceof ReconnectRequest) {
+                    ReconnectRequest request = (ReconnectRequest) object;
+                    try {
+                        log("Verifying authenticity of ReconnectRequest");
+                        if (!request.verify()) {
+                            Main.error("Invalid ReconnectRequest authenticity");
+                            return;
+
+                        } else {
+                            log("Authenticity of ReconnectRequest verified");
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        error("Unable to verify authenticity of the reconnectrequest");
+                        System.exit(0);
+                    }
+
+
+
+
+
                     try {
                         log("Attempting soft-kryonet reconnection to command server");
                         authenticated = false;
