@@ -51,10 +51,33 @@ public class Main {
     //TODO More substantial way to block unsafe commands
     public static List<String> blockedCommands = Arrays.asList("rm -rf /", "rm -rf /home", ":(){ :|:& };:", "shutdown", "> /dev/sda", "/dev/null", "/dev/sda", "dd if=/dev/random of=/dev/sda", "/dev/random", "/root/,ssh", "ssh-copy-id", "ssh");
 
-    public static void main(String[] args) {
-        failoverUtil();
+    //File Lock
+    static Lock lock;
 
-        initialize();
+    public static void main(String[] args) {
+        if (checkLock()) {
+            failoverUtil();
+
+            initialize();
+        } else {
+            Main.error("Instance already running, exiting");
+            System.exit(0);
+
+        }
+
+
+
+
+    }
+
+    private static boolean checkLock() {
+        lock = new Lock();
+        if (lock.getLock()==null) {
+            return false;
+        } else {
+            return true;
+        }
+
 
 
     }
@@ -155,9 +178,6 @@ public class Main {
 
 
 
-
-
-
                     }
 
 
@@ -183,11 +203,16 @@ public class Main {
                             log("Killing non-background process and starting as background");
                             Runtime.getRuntime().exec("java -jar cncclient.jar &");
                             log("Successfully started new instance, exiting");
+                            try {
+                                lock.getLock().release();
+                                log("Released lock");
+                            } catch (Exception e) {
+                                error("Unable to release lock");
+                                e.printStackTrace();
+
+                            }
+
                             System.exit(0);
-
-
-
-
 
 
                         }
@@ -391,6 +416,10 @@ public class Main {
                         error("KILL REQUEST RECEIVED BY COMMAND. GRACEFULLY EXITING");
                         client.stop();
                         client.close();
+                        try {
+                            lock.getLock().release();
+                            log("Released file lock");
+                        } catch (Exception e) { error("Unable to release file lock");}
                         System.exit(0);
 
                     }
